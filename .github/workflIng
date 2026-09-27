@@ -1,0 +1,63 @@
+name: Build NeonStreets APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Extract Android project
+        run: |
+          mkdir -p project
+          ZIP=$(find . -maxdepth 2 -type f -name "*.zip" | head -1)
+
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No ZIP file found"
+            exit 1
+          fi
+
+          echo "Using ZIP: $ZIP"
+          unzip -q "$ZIP" -d project
+
+          echo "Searching for Gradle wrapper..."
+          find project -type f \( -name "gradlew" -o -name "gradlew.bat" \) -print
+
+      - name: Find Gradle project
+        run: |
+          GRADLEW=$(find project -type f -name "gradlew" | head -1)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found inside the ZIP."
+            echo "ZIP contents:"
+            find project -maxdepth 4 -type f | head -200
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeonStreets-APK
+          path: project/**/build/outputs/apk/**/*.apk
